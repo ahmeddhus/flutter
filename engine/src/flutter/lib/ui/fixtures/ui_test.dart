@@ -111,6 +111,46 @@ Future<void> createSingleFrameCodec() async {
   _finish();
 }
 
+@pragma('vm:entry-point')
+Future<void> singleFrameCodecHandlesNoGpu() async {
+  final ImmutableBuffer buffer = await ImmutableBuffer.fromUint8List(
+    Uint8List.fromList(List<int>.filled(4, 100)),
+  );
+  final ImageDescriptor descriptor = ImageDescriptor.raw(
+    buffer,
+    width: 1,
+    height: 1,
+    pixelFormat: PixelFormat.rgba8888,
+  );
+  _turnOffGPU(true);
+  Timer flusher = Timer.periodic(Duration(milliseconds: 1), (timer) {
+    _flushGpuAwaitingTasks();
+  });
+  try {
+    final Codec codec = await descriptor.instantiateCodec();
+
+    // Call getNextFrame twice.  The first call will throw because the GPU has
+    // been disabled.  The second call will throw because SingleFrameCodec does
+    // not have a cached image.
+    for (int i = 0; i < 2; i++) {
+      bool didThrow = false;
+      try {
+        final FrameInfo info = await codec.getNextFrame();
+      } catch (e) {
+        didThrow = true;
+      }
+      assert(didThrow);
+    }
+
+    codec.dispose();
+    descriptor.dispose();
+    buffer.dispose();
+    _finish();
+  } finally {
+    flusher.cancel();
+  }
+}
+
 @pragma('vm:external-name', 'ValidateCodec')
 external void _validateCodec(Codec codec);
 
@@ -176,6 +216,7 @@ void sendSemanticsUpdate() {
   String tooltip = "tooltip";
 
   final Float64List transform = Float64List(16);
+  final Float64List hitTestTransform = Float64List(16);
   final Int32List childrenInTraversalOrder = Int32List(0);
   final Int32List childrenInHitTestOrder = Int32List(0);
   final Int32List additionalActions = Int32List(0);
@@ -198,6 +239,26 @@ void sendSemanticsUpdate() {
   transform[13] = 0;
   transform[14] = 0;
   transform[15] = 0;
+
+  hitTestTransform[0] = 1;
+  hitTestTransform[1] = 0;
+  hitTestTransform[2] = 0;
+  hitTestTransform[3] = 0;
+
+  hitTestTransform[4] = 0;
+  hitTestTransform[5] = 1;
+  hitTestTransform[6] = 0;
+  hitTestTransform[7] = 0;
+
+  hitTestTransform[8] = 0;
+  hitTestTransform[9] = 0;
+  hitTestTransform[10] = 1;
+  hitTestTransform[11] = 0;
+
+  hitTestTransform[12] = 0;
+  hitTestTransform[13] = 0;
+  hitTestTransform[14] = 0;
+  hitTestTransform[15] = 0;
   builder.updateNode(
     id: 0,
     flags: SemanticsFlags.none,
@@ -209,6 +270,7 @@ void sendSemanticsUpdate() {
     platformViewId: -1,
     scrollChildren: 0,
     scrollIndex: 0,
+    traversalParent: 0,
     scrollPosition: 0,
     scrollExtentMax: 0,
     scrollExtentMin: 0,
@@ -227,6 +289,7 @@ void sendSemanticsUpdate() {
     tooltip: tooltip,
     textDirection: TextDirection.ltr,
     transform: transform,
+    hitTestTransform: hitTestTransform,
     childrenInTraversalOrder: childrenInTraversalOrder,
     childrenInHitTestOrder: childrenInHitTestOrder,
     additionalActions: additionalActions,
@@ -244,6 +307,7 @@ void sendSemanticsUpdateWithRole() {
   final SemanticsUpdateBuilder builder = SemanticsUpdateBuilder();
 
   final Float64List transform = Float64List(16);
+  final Float64List hitTestTransform = Float64List(16);
   final Int32List childrenInTraversalOrder = Int32List(0);
   final Int32List childrenInHitTestOrder = Int32List(0);
   final Int32List additionalActions = Int32List(0);
@@ -251,6 +315,10 @@ void sendSemanticsUpdateWithRole() {
   transform[0] = 1;
   transform[5] = 1;
   transform[10] = 1;
+
+  hitTestTransform[0] = 1;
+  hitTestTransform[5] = 1;
+  hitTestTransform[10] = 1;
   builder.updateNode(
     id: 0,
     flags: SemanticsFlags.none,
@@ -262,6 +330,7 @@ void sendSemanticsUpdateWithRole() {
     platformViewId: -1,
     scrollChildren: 0,
     scrollIndex: 0,
+    traversalParent: 0,
     scrollPosition: 0,
     scrollExtentMax: 0,
     scrollExtentMin: 0,
@@ -280,6 +349,7 @@ void sendSemanticsUpdateWithRole() {
     tooltip: "tooltip",
     textDirection: TextDirection.ltr,
     transform: transform,
+    hitTestTransform: hitTestTransform,
     childrenInTraversalOrder: childrenInTraversalOrder,
     childrenInHitTestOrder: childrenInHitTestOrder,
     additionalActions: additionalActions,
@@ -289,6 +359,123 @@ void sendSemanticsUpdateWithRole() {
     controlsNodes: null,
     inputType: SemanticsInputType.none,
     locale: null,
+  );
+  _semanticsUpdate(builder.build());
+}
+
+@pragma('vm:entry-point')
+void sendSemanticsUpdateWithLocale() {
+  final SemanticsUpdateBuilder builder = SemanticsUpdateBuilder();
+
+  final Float64List transform = Float64List(16);
+  final Float64List hitTestTransform = Float64List(16);
+  final Int32List childrenInTraversalOrder = Int32List(0);
+  final Int32List childrenInHitTestOrder = Int32List(0);
+  final Int32List additionalActions = Int32List(0);
+  // Identity matrix 4x4.
+  transform[0] = 1;
+  transform[5] = 1;
+  transform[10] = 1;
+
+  hitTestTransform[0] = 1;
+  hitTestTransform[5] = 1;
+  hitTestTransform[10] = 1;
+  builder.updateNode(
+    id: 0,
+    flags: SemanticsFlags.none,
+    actions: 0,
+    maxValueLength: 0,
+    currentValueLength: 0,
+    textSelectionBase: -1,
+    textSelectionExtent: -1,
+    platformViewId: -1,
+    scrollChildren: 0,
+    scrollIndex: 0,
+    scrollPosition: 0,
+    scrollExtentMax: 0,
+    scrollExtentMin: 0,
+    traversalParent: 0,
+    rect: Rect.fromLTRB(0, 0, 10, 10),
+    identifier: "identifier",
+    label: "label",
+    labelAttributes: const <StringAttribute>[],
+    value: "value",
+    valueAttributes: const <StringAttribute>[],
+    increasedValue: "increasedValue",
+    increasedValueAttributes: const <StringAttribute>[],
+    decreasedValue: "decreasedValue",
+    decreasedValueAttributes: const <StringAttribute>[],
+    hint: "hint",
+    hintAttributes: const <StringAttribute>[],
+    tooltip: "tooltip",
+    textDirection: TextDirection.ltr,
+    transform: transform,
+    hitTestTransform: hitTestTransform,
+    childrenInTraversalOrder: childrenInTraversalOrder,
+    childrenInHitTestOrder: childrenInHitTestOrder,
+    additionalActions: additionalActions,
+    headingLevel: 0,
+    linkUrl: '',
+    role: SemanticsRole.none,
+    controlsNodes: null,
+    inputType: SemanticsInputType.none,
+    locale: Locale('es', 'MX'),
+  );
+  _semanticsUpdate(builder.build());
+}
+
+@pragma('vm:entry-point')
+void sendSemanticsUpdateWithIsLink() {
+  final SemanticsUpdateBuilder builder = SemanticsUpdateBuilder();
+
+  final Float64List transform = Float64List(16);
+  final Int32List childrenInTraversalOrder = Int32List(0);
+  final Int32List childrenInHitTestOrder = Int32List(0);
+  final Int32List additionalActions = Int32List(0);
+  // Identity matrix 4x4.
+  transform[0] = 1;
+  transform[5] = 1;
+  transform[10] = 1;
+  builder.updateNode(
+    id: 0,
+    flags: SemanticsFlags.none.copyWith(isLink: true),
+    actions: 0,
+    maxValueLength: 0,
+    currentValueLength: 0,
+    textSelectionBase: -1,
+    textSelectionExtent: -1,
+    platformViewId: -1,
+    scrollChildren: 0,
+    scrollIndex: 0,
+    traversalParent: 0,
+    scrollPosition: 0,
+    scrollExtentMax: 0,
+    scrollExtentMin: 0,
+    rect: Rect.fromLTRB(0, 0, 10, 10),
+    identifier: "identifier",
+    label: "label",
+    labelAttributes: const <StringAttribute>[],
+    value: "value",
+    valueAttributes: const <StringAttribute>[],
+    increasedValue: "increasedValue",
+    increasedValueAttributes: const <StringAttribute>[],
+    decreasedValue: "decreasedValue",
+    decreasedValueAttributes: const <StringAttribute>[],
+    hint: "hint",
+    hintAttributes: const <StringAttribute>[],
+    tooltip: "tooltip",
+    textDirection: TextDirection.ltr,
+    transform: transform,
+    hitTestTransform: transform,
+    childrenInTraversalOrder: childrenInTraversalOrder,
+    childrenInHitTestOrder: childrenInHitTestOrder,
+    additionalActions: additionalActions,
+    headingLevel: 0,
+    linkUrl: '',
+    role: SemanticsRole.none,
+    controlsNodes: null,
+    inputType: SemanticsInputType.none,
+    locale: Locale('es', 'MX'),
   );
   _semanticsUpdate(builder.build());
 }
@@ -676,7 +863,7 @@ void hooksTests() async {
     window.onMetricsChanged!();
     _callHook(
       '_updateWindowMetrics',
-      21,
+      25,
       0, // window Id
       0.1234, // device pixel ratio
       0.0, // width
@@ -698,6 +885,10 @@ void hooksTests() async {
       <int>[], // display features types
       <int>[], // display features states
       0, // Display ID
+      0.0, // minWidth
+      0.0, // maxWidth
+      0.0, // minHeight
+      0.0, // maxHeight
     );
 
     expectIdentical(originalZone, callbackZone);
@@ -790,7 +981,7 @@ void hooksTests() async {
   await test('View padding/insets/viewPadding/systemGestureInsets', () {
     _callHook(
       '_updateWindowMetrics',
-      21,
+      25,
       0, // window Id
       1.0, // devicePixelRatio
       800.0, // width
@@ -812,6 +1003,10 @@ void hooksTests() async {
       <int>[], // display features types
       <int>[], // display features states
       0, // Display ID
+      0.0, // minWidth
+      1000.0, // maxWidth
+      0.0, // minHeight
+      1000.0, // maxHeight
     );
 
     expectEquals(window.viewInsets.bottom, 0.0);
@@ -821,7 +1016,7 @@ void hooksTests() async {
 
     _callHook(
       '_updateWindowMetrics',
-      21,
+      25,
       0, // window Id
       1.0, // devicePixelRatio
       800.0, // width
@@ -843,6 +1038,10 @@ void hooksTests() async {
       <int>[], // display features types
       <int>[], // display features states
       0, // Display ID
+      0.0, // minWidth
+      0.0, // maxWidth
+      0.0, // minHeight
+      0.0, // maxHeight
     );
 
     expectEquals(window.viewInsets.bottom, 400.0);
@@ -854,7 +1053,7 @@ void hooksTests() async {
   await test('Window physical touch slop', () {
     _callHook(
       '_updateWindowMetrics',
-      21,
+      25,
       0, // window Id
       1.0, // devicePixelRatio
       800.0, // width
@@ -876,13 +1075,17 @@ void hooksTests() async {
       <int>[], // display features types
       <int>[], // display features states
       0, // Display ID
+      0.0, // minWidth
+      0.0, // maxWidth
+      0.0, // minHeight
+      0.0, // maxHeight
     );
 
     expectEquals(window.gestureSettings, GestureSettings(physicalTouchSlop: 11.0));
 
     _callHook(
       '_updateWindowMetrics',
-      21,
+      25,
       0, // window Id
       1.0, // devicePixelRatio
       800.0, // width
@@ -904,13 +1107,17 @@ void hooksTests() async {
       <int>[], // display features types
       <int>[], // display features states
       0, // Display ID
+      0.0, // minWidth
+      0.0, // maxWidth
+      0.0, // minHeight
+      0.0, // maxHeight
     );
 
     expectEquals(window.gestureSettings, GestureSettings(physicalTouchSlop: null));
 
     _callHook(
       '_updateWindowMetrics',
-      21,
+      25,
       0, // window Id
       1.0, // devicePixelRatio
       800.0, // width
@@ -932,6 +1139,10 @@ void hooksTests() async {
       <int>[], // display features types
       <int>[], // display features states
       0, // Display ID
+      0.0, // minWidth
+      0.0, // maxWidth
+      0.0, // minHeight
+      0.0, // maxHeight
     );
 
     expectEquals(window.gestureSettings, GestureSettings(physicalTouchSlop: 22.0));
@@ -1328,4 +1539,8 @@ external void _callHook(
   Object? arg19,
   Object? arg20,
   Object? arg21,
+  Object? arg22,
+  Object? arg23,
+  Object? arg24,
+  Object? arg25,
 ]);

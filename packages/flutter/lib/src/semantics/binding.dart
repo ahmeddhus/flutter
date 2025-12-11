@@ -40,6 +40,10 @@ mixin SemanticsBinding on BindingBase {
       };
     _handleSemanticsEnabledChanged();
     addSemanticsEnabledListener(_handleFrameworkSemanticsEnabledChanged);
+    // Ensure the initial value is set.
+    if (semanticsEnabled) {
+      _handleFrameworkSemanticsEnabledChanged();
+    }
   }
 
   /// The current [SemanticsBinding], if one has been created.
@@ -157,7 +161,7 @@ mixin SemanticsBinding on BindingBase {
     // be modified while iterating, we are creating a local copy for the iteration.
     final List<ValueSetter<ui.SemanticsActionEvent>> localListeners = _semanticsActionListeners
         .toList(growable: false);
-    for (final ValueSetter<ui.SemanticsActionEvent> listener in localListeners) {
+    for (final listener in localListeners) {
       if (_semanticsActionListeners.contains(listener)) {
         listener(decodedAction);
       }

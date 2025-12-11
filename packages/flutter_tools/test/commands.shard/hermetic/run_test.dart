@@ -80,38 +80,6 @@ void main() {
     );
 
     testUsingContext(
-      'does not support "--use-application-binary" and "--fast-start"',
-      () async {
-        fileSystem.file('lib/main.dart').createSync(recursive: true);
-        fileSystem.file('pubspec.yaml').createSync();
-        fileSystem.file('.dart_tool/package_config.json').createSync(recursive: true);
-
-        final command = RunCommand();
-        await expectLater(
-          () => createTestCommandRunner(command).run(<String>[
-            'run',
-            '--use-application-binary=app/bar/faz',
-            '--fast-start',
-            '--no-pub',
-            '--show-test-device',
-          ]),
-          throwsA(
-            isException.having(
-              (Exception exception) => exception.toString(),
-              'toString',
-              isNot(contains('--fast-start is not supported with --use-application-binary')),
-            ),
-          ),
-        );
-      },
-      overrides: <Type, Generator>{
-        FileSystem: () => fileSystem,
-        ProcessManager: () => FakeProcessManager.any(),
-        Logger: () => logger,
-      },
-    );
-
-    testUsingContext(
       'Walks upward looking for a pubspec.yaml and succeeds if found',
       () async {
         fileSystem.file('pubspec.yaml').createSync();
@@ -1409,7 +1377,7 @@ void main() {
 
 class TestDeviceManager extends DeviceManager {
   TestDeviceManager({required super.logger});
-  var devices = <Device>[];
+  List<Device> devices = <Device>[];
 
   @override
   List<DeviceDiscovery> get deviceDiscoverers {
@@ -1461,13 +1429,10 @@ class FakeDevice extends Fake implements Device {
   Future<bool> get supportsHardwareRendering async => true;
 
   @override
-  var supportsHotReload = false;
+  bool supportsHotReload = false;
 
   @override
   bool get supportsHotRestart => true;
-
-  @override
-  bool get supportsFastStart => false;
 
   @override
   bool get supportsFlavors => _supportsFlavors;
@@ -1481,7 +1446,7 @@ class FakeDevice extends Fake implements Device {
   @override
   DeviceConnectionInterface get connectionInterface => DeviceConnectionInterface.attached;
 
-  var supported = true;
+  bool supported = true;
 
   @override
   bool isSupportedForProject(FlutterProject flutterProject) => _isSupported;
@@ -1697,13 +1662,13 @@ class CapturingAppDomain extends AppDomain {
 
 class FakeAnsiTerminal extends Fake implements AnsiTerminal {
   /// Setting to false will cause operations to Stdin to throw a [StdinException].
-  var hasStdin = true;
+  bool hasStdin = true;
 
   @override
-  var usesTerminalUi = false;
+  bool usesTerminalUi = false;
 
   /// A list of all the calls to the [singleCharMode] setter.
-  var setSingleCharModeHistory = <bool>[];
+  List<bool> setSingleCharModeHistory = <bool>[];
 
   @override
   set singleCharMode(bool value) {

@@ -33,10 +33,10 @@ object FlutterPluginUtils {
     internal const val PROP_SPLIT_PER_ABI = "split-per-abi"
     internal const val PROP_LOCAL_ENGINE_REPO = "local-engine-repo"
     internal const val PROP_IS_VERBOSE = "verbose"
-    internal const val PROP_IS_FAST_START = "fast-start"
     internal const val PROP_TARGET = "target"
     internal const val PROP_LOCAL_ENGINE_BUILD_MODE = "local-engine-build-mode"
     internal const val PROP_TARGET_PLATFORM = "target-platform"
+    internal const val PROP_DISABLE_ABI_FILTERING = "disable-abi-filtering"
 
     // ----------------- Methods for string manipulation and comparison. -----------------
 
@@ -204,15 +204,9 @@ object FlutterPluginUtils {
     @JvmName("isProjectVerbose")
     internal fun isProjectVerbose(project: Project): Boolean = project.findProperty(PROP_IS_VERBOSE)?.toString()?.toBoolean() ?: false
 
-    /** Whether to build the debug app in "fast-start" mode. */
     @JvmStatic
-    @JvmName("isProjectFastStart")
-    internal fun isProjectFastStart(project: Project): Boolean =
-        project
-            .findProperty(
-                PROP_IS_FAST_START
-            )?.toString()
-            ?.toBoolean() ?: false
+    @JvmName("shouldProjectDisableAbiFiltering")
+    internal fun shouldProjectDisableAbiFiltering(project: Project): Boolean = project.hasProperty(PROP_DISABLE_ABI_FILTERING)
 
     /**
      * TODO: Remove this AGP hack. https://github.com/flutter/flutter/issues/109560

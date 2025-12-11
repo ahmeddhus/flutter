@@ -161,6 +161,7 @@ class MenuAnchor extends StatefulWidget {
     this.childFocusNode,
     this.style,
     this.alignmentOffset = Offset.zero,
+    this.reservedPadding,
     this.layerLink,
     this.clipBehavior = Clip.hardEdge,
     @Deprecated(
@@ -318,6 +319,11 @@ class MenuAnchor extends StatefulWidget {
   /// to rebuild this child when those change.
   final Widget? child;
 
+  /// The padding between the edge of the safe area and the menu panel.
+  ///
+  /// Defaults to EdgeInsets.all(8).
+  final EdgeInsetsGeometry? reservedPadding;
+
   @override
   State<MenuAnchor> createState() => _MenuAnchorState();
 
@@ -358,7 +364,11 @@ class _MenuAnchorState extends State<MenuAnchor> {
   void didUpdateWidget(MenuAnchor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.controller != widget.controller) {
-      _internalMenuController = widget.controller != null ? MenuController() : null;
+      if (widget.controller == null) {
+        _internalMenuController = MenuController();
+      } else {
+        _internalMenuController = null;
+      }
     }
   }
 
@@ -406,11 +416,12 @@ class _MenuAnchorState extends State<MenuAnchor> {
       menuPosition: position,
       anchor: this,
       alignmentOffset: widget.alignmentOffset ?? Offset.zero,
+      reservedPadding: widget.reservedPadding ?? const EdgeInsets.all(_kMenuViewPadding),
     );
   }
 
   _MenuAnchorState get _root {
-    _MenuAnchorState anchor = this;
+    var anchor = this;
     while (anchor._parent != null) {
       anchor = anchor._parent!;
     }
@@ -928,7 +939,7 @@ class _MenuItemButtonState extends State<MenuItemButton> {
       autofocus: widget.enabled && widget.autofocus,
       statesController: widget.statesController,
       clipBehavior: widget.clipBehavior,
-      isSemanticButton: null,
+      isSemanticButton: kIsWeb ? true : null,
       child: _MenuItemLabel(
         leadingIcon: widget.leadingIcon,
         shortcut: widget.shortcut,
@@ -1756,7 +1767,7 @@ class _SubmenuButtonState extends State<SubmenuButton> {
       (Axis.vertical, TextDirection.rtl) => Offset(0, -menuPadding.top),
       (Axis.vertical, TextDirection.ltr) => Offset(0, -menuPadding.top),
     };
-    final Set<WidgetState> states = <WidgetState>{
+    final states = <WidgetState>{
       if (!_enabled) WidgetState.disabled,
       if (_isHovered) WidgetState.hovered,
       if (_buttonFocusNode.hasFocus) WidgetState.focused,
@@ -1839,7 +1850,7 @@ class _SubmenuButtonState extends State<SubmenuButton> {
                 focusNode: _buttonFocusNode,
                 onFocusChange: _enabled ? widget.onFocusChange : null,
                 onPressed: _enabled ? toggleShowMenu : null,
-                isSemanticButton: null,
+                isSemanticButton: kIsWeb ? true : null,
                 child: _MenuItemLabel(
                   leadingIcon: widget.leadingIcon,
                   trailingIcon: widget.trailingIcon,
@@ -2111,7 +2122,7 @@ class _LocalizedShortcutLabeler {
     }
     if (serialized.trigger != null) {
       final LogicalKeyboardKey trigger = serialized.trigger!;
-      final List<String> modifiers = <String>[
+      final modifiers = <String>[
         if (_usesSymbolicModifiers) ...<String>[
           // macOS/iOS platform convention uses this ordering, with ⌘ always last.
           if (serialized.control!) _getModifierLabel(LogicalKeyboardKey.control, localizations),
@@ -2149,7 +2160,7 @@ class _LocalizedShortcutLabeler {
         if (shortcutTrigger != null && shortcutTrigger.isNotEmpty) shortcutTrigger,
       ].join(keySeparator);
     } else if (serialized.character != null) {
-      final List<String> modifiers = <String>[
+      final modifiers = <String>[
         // Character based shortcuts cannot check shifted keys.
         if (_usesSymbolicModifiers) ...<String>[
           // macOS/iOS platform convention uses this ordering, with ⌘ always last.
@@ -2317,7 +2328,7 @@ class _MenuBarAnchorState extends _MenuAnchorState {
 
   @override
   Widget build(BuildContext context) {
-    final Actions child = Actions(
+    final child = Actions(
       actions: actions,
       child: Shortcuts(
         shortcuts: _kMenuTraversalShortcuts,
@@ -2587,15 +2598,15 @@ class MenuAcceleratorLabel extends StatefulWidget {
   ///
   /// {@macro flutter.material.menu_anchor.menu_accelerator_label.label}
   static String stripAcceleratorMarkers(String label, {void Function(int index)? setIndex}) {
-    int quotedAmpersands = 0;
-    final StringBuffer displayLabel = StringBuffer();
-    int acceleratorIndex = -1;
+    var quotedAmpersands = 0;
+    final displayLabel = StringBuffer();
+    var acceleratorIndex = -1;
     // Use characters so that we don't split up surrogate pairs and interpret
     // them incorrectly.
     final Characters labelChars = label.characters;
     final Characters ampersand = '&'.characters;
-    bool lastWasAmpersand = false;
-    for (int i = 0; i < labelChars.length; i += 1) {
+    var lastWasAmpersand = false;
+    for (var i = 0; i < labelChars.length; i += 1) {
       // Stop looking one before the end, since a single ampersand at the end is
       // just treated as a quoted ampersand.
       final Characters character = labelChars.characterAt(i);
@@ -2920,6 +2931,7 @@ class _MenuLayout extends SingleChildLayoutDelegate {
     required this.avoidBounds,
     required this.orientation,
     required this.parentOrientation,
+    required this.reservedPadding,
   });
 
   // Rectangle of underlying button, relative to the overlay's dimensions.
@@ -2951,13 +2963,14 @@ class _MenuLayout extends SingleChildLayoutDelegate {
   // The orientation of this menu's parent.
   final Axis parentOrientation;
 
+  // How close to the edge of the safe area the menu will be placed.
+  final EdgeInsetsGeometry reservedPadding;
+
   @override
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
-    // The menu can be at most the size of the overlay minus _kMenuViewPadding
-    // pixels in each direction.
-    return BoxConstraints.loose(
-      constraints.biggest,
-    ).deflate(const EdgeInsets.all(_kMenuViewPadding));
+    // The menu can be at most the size of the overlay minus the view padding
+    // in each direction.
+    return BoxConstraints.loose(constraints.biggest).deflate(reservedPadding);
   }
 
   @override
@@ -3076,12 +3089,13 @@ class _MenuLayout extends SingleChildLayoutDelegate {
         menuPadding != oldDelegate.menuPadding ||
         orientation != oldDelegate.orientation ||
         parentOrientation != oldDelegate.parentOrientation ||
+        reservedPadding != oldDelegate.reservedPadding ||
         !setEquals(avoidBounds, oldDelegate.avoidBounds);
   }
 
   Rect _closestScreen(Iterable<Rect> screens, Offset point) {
     Rect closest = screens.first;
-    for (final Rect screen in screens) {
+    for (final screen in screens) {
       if ((screen.center - point).distance < (closest.center - point).distance) {
         closest = screen;
       }
@@ -3289,6 +3303,7 @@ class _Submenu extends StatelessWidget {
     this.crossAxisUnconstrained = true,
     required this.menuChildren,
     required this.menuScopeNode,
+    required this.reservedPadding,
   });
 
   final FocusScopeNode menuScopeNode;
@@ -3301,6 +3316,7 @@ class _Submenu extends StatelessWidget {
   final Clip clipBehavior;
   final bool crossAxisUnconstrained;
   final List<Widget> menuChildren;
+  final EdgeInsetsGeometry reservedPadding;
 
   @override
   Widget build(BuildContext context) {
@@ -3320,7 +3336,7 @@ class _Submenu extends StatelessWidget {
       });
     }
 
-    final MaterialStateMouseCursor mouseCursor = _MouseCursor(
+    final WidgetStateMouseCursor mouseCursor = _MouseCursor(
       (Set<WidgetState> states) =>
           effectiveValue((MenuStyle? style) => style?.mouseCursor?.resolve(states)),
     );
@@ -3399,6 +3415,7 @@ class _Submenu extends StatelessWidget {
                 menuPosition: menuPosition.position,
                 orientation: anchor._orientation,
                 parentOrientation: anchor._parent?._orientation ?? Axis.horizontal,
+                reservedPadding: reservedPadding,
               ),
               child: menuPanel,
             );
@@ -3421,10 +3438,10 @@ class _Submenu extends StatelessWidget {
 
 /// Wraps the [WidgetStateMouseCursor] so that it can default to
 /// [MouseCursor.uncontrolled] if none is set.
-class _MouseCursor extends MaterialStateMouseCursor {
+class _MouseCursor extends WidgetStateMouseCursor {
   const _MouseCursor(this.resolveCallback);
 
-  final MaterialPropertyResolver<MouseCursor?> resolveCallback;
+  final WidgetPropertyResolver<MouseCursor?> resolveCallback;
 
   @override
   MouseCursor resolve(Set<WidgetState> states) =>
@@ -3624,16 +3641,7 @@ class _MenuButtonDefaultsM3 extends ButtonStyle {
   }
 
   @override
-  WidgetStateProperty<MouseCursor?>? get mouseCursor {
-    return WidgetStateProperty.resolveWith(
-      (Set<WidgetState> states) {
-        if (states.contains(WidgetState.disabled)) {
-          return SystemMouseCursors.basic;
-        }
-        return SystemMouseCursors.click;
-      },
-    );
-  }
+  WidgetStateProperty<MouseCursor?>? get mouseCursor => WidgetStateMouseCursor.adaptiveClickable;
 
   @override
   WidgetStateProperty<Color?>? get overlayColor {

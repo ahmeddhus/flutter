@@ -35,6 +35,75 @@ TEST_P(AiksTest, CanRenderColoredRect) {
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
 }
 
+namespace {
+using DrawRectProc =
+    std::function<void(DisplayListBuilder&, const DlRect&, const DlPaint&)>;
+
+sk_sp<DisplayList> MakeWideStrokedRects(Point scale,
+                                        const DrawRectProc& draw_rect) {
+  DisplayListBuilder builder;
+  builder.Scale(scale.x, scale.y);
+  builder.DrawColor(DlColor::kWhite(), DlBlendMode::kSrc);
+
+  DlPaint paint;
+  paint.setColor(DlColor::kBlue().withAlphaF(0.5));
+  paint.setDrawStyle(DlDrawStyle::kStroke);
+  paint.setStrokeWidth(30.0f);
+
+  // Each of these 3 sets of rects includes (with different join types):
+  // - One rectangle with a gap in the middle
+  // - One rectangle with no gap because it is too narrow
+  // - One rectangle with no gap because it is too short
+  paint.setStrokeJoin(DlStrokeJoin::kBevel);
+  draw_rect(builder, DlRect::MakeXYWH(100.0f, 100.0f, 100.0f, 100.0f), paint);
+  draw_rect(builder, DlRect::MakeXYWH(250.0f, 100.0f, 10.0f, 100.0f), paint);
+  draw_rect(builder, DlRect::MakeXYWH(100.0f, 250.0f, 100.0f, 10.0f), paint);
+
+  paint.setStrokeJoin(DlStrokeJoin::kRound);
+  draw_rect(builder, DlRect::MakeXYWH(350.0f, 100.0f, 100.0f, 100.0f), paint);
+  draw_rect(builder, DlRect::MakeXYWH(500.0f, 100.0f, 10.0f, 100.0f), paint);
+  draw_rect(builder, DlRect::MakeXYWH(350.0f, 250.0f, 100.0f, 10.0f), paint);
+
+  paint.setStrokeJoin(DlStrokeJoin::kMiter);
+  draw_rect(builder, DlRect::MakeXYWH(600.0f, 100.0f, 100.0f, 100.0f), paint);
+  draw_rect(builder, DlRect::MakeXYWH(750.0f, 100.0f, 10.0f, 100.0f), paint);
+  draw_rect(builder, DlRect::MakeXYWH(600.0f, 250.0f, 100.0f, 10.0f), paint);
+
+  // And now draw 3 rectangles with a stroke width so large that that it
+  // overlaps in the middle in both directions (horizontal/vertical).
+  paint.setStrokeWidth(110.0f);
+
+  paint.setStrokeJoin(DlStrokeJoin::kBevel);
+  draw_rect(builder, DlRect::MakeXYWH(100.0f, 400.0f, 100.0f, 100.0f), paint);
+
+  paint.setStrokeJoin(DlStrokeJoin::kRound);
+  draw_rect(builder, DlRect::MakeXYWH(350.0f, 400.0f, 100.0f, 100.0f), paint);
+
+  paint.setStrokeJoin(DlStrokeJoin::kMiter);
+  draw_rect(builder, DlRect::MakeXYWH(600.0f, 400.0f, 100.0f, 100.0f), paint);
+
+  return builder.Build();
+}
+}  // namespace
+
+TEST_P(AiksTest, CanRenderWideStrokedRectWithoutOverlap) {
+  ASSERT_TRUE(OpenPlaygroundHere(MakeWideStrokedRects(
+      GetContentScale(), [](DisplayListBuilder& builder, const DlRect& rect,
+                            const DlPaint& paint) {
+        // Draw the rect directly
+        builder.DrawRect(rect, paint);
+      })));
+}
+
+TEST_P(AiksTest, CanRenderWideStrokedRectPathWithoutOverlap) {
+  ASSERT_TRUE(OpenPlaygroundHere(MakeWideStrokedRects(
+      GetContentScale(), [](DisplayListBuilder& builder, const DlRect& rect,
+                            const DlPaint& paint) {
+        // Draw the rect as a Path
+        builder.DrawPath(DlPath::MakeRect(rect), paint);
+      })));
+}
+
 TEST_P(AiksTest, CanRenderImage) {
   DisplayListBuilder builder;
   DlPaint paint;
@@ -783,6 +852,25 @@ void RenderArcFarm(DisplayListBuilder& builder,
   }
   builder.Restore();
 }
+
+void RenderArcFarmForOverlappingCapsTest(DisplayListBuilder& builder,
+                                         const DlPaint& paint) {
+  builder.Save();
+  builder.Translate(40, 30);
+  const Rect arc_bounds = Rect::MakeLTRB(0, 0, 40, 40);
+  for (int stroke_width = 10; stroke_width <= 40; stroke_width += 3) {
+    DlPaint modified_paint = DlPaint(paint);
+    modified_paint.setStrokeWidth(stroke_width);
+    builder.Save();
+    for (int sweep = 160; sweep <= 360; sweep += 20) {
+      builder.DrawArc(arc_bounds, 0, sweep, false, modified_paint);
+      builder.Translate(84, 0);
+    }
+    builder.Restore();
+    builder.Translate(0, 44 + stroke_width);
+  }
+  builder.Restore();
+}
 }  // namespace
 
 TEST_P(AiksTest, FilledArcsRenderCorrectly) {
@@ -792,6 +880,23 @@ TEST_P(AiksTest, FilledArcsRenderCorrectly) {
 
   DlPaint paint;
   paint.setColor(DlColor::kBlue());
+
+  RenderArcFarm(builder, paint,
+                {
+                    .use_center = false,
+                    .full_circles = false,
+                });
+
+  ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
+}
+
+TEST_P(AiksTest, TranslucentFilledArcsRenderCorrectly) {
+  DisplayListBuilder builder;
+  builder.Scale(GetContentScale().x, GetContentScale().y);
+  builder.DrawColor(DlColor::kWhite(), DlBlendMode::kSrc);
+
+  DlPaint paint;
+  paint.setColor(DlColor::kBlue().modulateOpacity(0.5));
 
   RenderArcFarm(builder, paint,
                 {
@@ -895,6 +1000,21 @@ TEST_P(AiksTest, StrokedArcsRenderCorrectlyWithSquareEnds) {
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
 }
 
+TEST_P(AiksTest, StrokedArcsRenderCorrectlyWithTranslucencyAndSquareEnds) {
+  DisplayListBuilder builder;
+  builder.Scale(GetContentScale().x, GetContentScale().y);
+  builder.DrawColor(DlColor::kWhite(), DlBlendMode::kSrc);
+
+  DlPaint paint;
+  paint.setDrawStyle(DlDrawStyle::kStroke);
+  paint.setStrokeCap(DlStrokeCap::kSquare);
+  paint.setColor(DlColor::kBlue().modulateOpacity(0.5));
+
+  RenderArcFarmForOverlappingCapsTest(builder, paint);
+
+  ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
+}
+
 TEST_P(AiksTest, StrokedArcsRenderCorrectlyWithRoundEnds) {
   DisplayListBuilder builder;
   builder.Scale(GetContentScale().x, GetContentScale().y);
@@ -911,6 +1031,21 @@ TEST_P(AiksTest, StrokedArcsRenderCorrectlyWithRoundEnds) {
                     .use_center = false,
                     .full_circles = false,
                 });
+
+  ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
+}
+
+TEST_P(AiksTest, StrokedArcsRenderCorrectlyWithTranslucencyAndRoundEnds) {
+  DisplayListBuilder builder;
+  builder.Scale(GetContentScale().x, GetContentScale().y);
+  builder.DrawColor(DlColor::kWhite(), DlBlendMode::kSrc);
+
+  DlPaint paint;
+  paint.setDrawStyle(DlDrawStyle::kStroke);
+  paint.setStrokeCap(DlStrokeCap::kRound);
+  paint.setColor(DlColor::kBlue().modulateOpacity(0.5));
+
+  RenderArcFarmForOverlappingCapsTest(builder, paint);
 
   ASSERT_TRUE(OpenPlaygroundHere(builder.Build()));
 }
